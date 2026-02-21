@@ -1,54 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <title>Smart Inventory · local shop</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>stockflow · inventory</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- main content sections (SPA views) -->
-    <main id="viewContainer" class="view-container"></main>
+    <!-- mobile shell -->
+    <div class="app-container" id="appContainer">
+        <!-- header with logo + today shortcut -->
+        <header class="app-header">
+            <div class="logo">
+                <span class="logo-icon">📦</span>
+                <h1>stockflow</h1>
+            </div>
+            <button class="insight-btn" id="insightToggleBtn" aria-label="business snapshot">📊</button>
+        </header>
 
-    <!-- floating bottom navigation -->
-    <nav class="bottom-nav" id="bottomNav">
-      <button class="nav-item active" data-tab="home">🏠 Home</button>
-      <button class="nav-item" data-tab="products">📦 Products</button>
-      <button class="nav-item" data-tab="sales">🛒 Sales</button>
-      <button class="nav-item" data-tab="report">📊 Report</button>
-    </nav>
+        <!-- main dashboard / product grid -->
+        <main class="product-grid" id="productGrid">
+            <!-- dynamic cards injected via js -->
+        </main>
 
-    <!-- floating action button (only visible in products) -->
-    <button id="fabAddProduct" class="fab" style="display: none;">+</button>
-  </div>
+        <!-- floating action button -->
+        <button class="fab" id="openAddModalBtn" aria-label="add new item">+</button>
 
-  <!-- modals (hidden by default) -->
-  <div id="productModal" class="modal">
-    <div class="modal-content">
-      <h3 id="modalTitle">➕ new product</h3>
-      <input type="text" id="productName" placeholder="product name" autocomplete="off">
-      <input type="number" id="buyPrice" placeholder="buying price ₹" min="0" step="1">
-      <input type="number" id="sellPrice" placeholder="selling price ₹" min="0" step="1">
-      <input type="number" id="stockQty" placeholder="stock quantity" min="0" step="1">
-      <div class="modal-actions">
-        <button id="saveProductBtn" class="btn-primary">💾 save</button>
-        <button id="cancelModalBtn" class="btn-secondary">cancel</button>
-      </div>
+        <!-- bottom insight panel (collapsible) -->
+        <div class="insight-panel" id="insightPanel">
+            <div class="insight-header">
+                <span>📈 snapshot</span>
+                <button id="closeInsightBtn">✕</button>
+            </div>
+            <div class="insight-content" id="insightContent">
+                <!-- stats populated by js -->
+            </div>
+        </div>
+
+        <!-- modals (hidden by default) -->
+
+        <!-- add / edit modal (one form) -->
+        <div class="modal-overlay" id="productModal">
+            <div class="modal-card">
+                <h2 id="modalTitle">➕ add product</h2>
+                <form id="productForm" novalidate>
+                    <input type="hidden" id="productId" value="">
+                    <div class="field">
+                        <label for="itemName">name</label>
+                        <input type="text" id="itemName" placeholder="e.g. rice 5kg" required>
+                    </div>
+                    <div class="field">
+                        <label for="itemPrice">price (₹)</label>
+                        <input type="number" id="itemPrice" placeholder="0" min="0" step="0.01" required>
+                    </div>
+                    <div class="field">
+                        <label for="itemStock">stock (units)</label>
+                        <input type="number" id="itemStock" placeholder="0" min="0" step="1" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary-btn" id="cancelModalBtn">cancel</button>
+                        <button type="submit" class="primary-btn" id="saveProductBtn">save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- sell modal (reduce stock) -->
+        <div class="modal-overlay" id="sellModal">
+            <div class="modal-card">
+                <h2>💸 sell item</h2>
+                <div id="sellProductInfo" class="sell-info"></div>
+                <form id="sellForm">
+                    <div class="field">
+                        <label for="sellQuantity">quantity sold</label>
+                        <input type="number" id="sellQuantity" min="1" step="1" placeholder="1" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary-btn" id="cancelSellBtn">cancel</button>
+                        <button type="submit" class="primary-btn">confirm sale</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <div id="deleteModal" class="modal">
-    <div class="modal-content delete-modal">
-      <p>🗑️ delete product?</p>
-      <p class="delete-warning">this cannot be undone</p>
-      <div class="modal-actions">
-        <button id="confirmDeleteBtn" class="btn-danger">yes, delete</button>
-        <button id="cancelDeleteBtn" class="btn-secondary">cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
+    <!-- hidden delete confirmation (uses browser confirm, clean & simple) -->
+    <script src="script.js"></script>
 </body>
-                                                                     </html>
+  </html>
