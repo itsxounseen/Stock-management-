@@ -1,309 +1,298 @@
-// script.js – Smart Inventory, vanilla, localStorage
-document.addEventListener('DOMContentLoaded', function () {
-  // ----- strict DOM selections (no implicit globals) -----
-  const viewContainer = document.getElementById('viewContainer');
-  const bottomNav = document.getElementById('bottomNav');
-  const fabAdd = document.getElementById('fabAddProduct');
-  const productModal = document.getElementById('productModal');
-  const deleteModal = document.getElementById('deleteModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const productName = document.getElementById('productName');
-  const buyPrice = document.getElementById('buyPrice');
-  const sellPrice = document.getElementById('sellPrice');
-  const stockQty = document.getElementById('stockQty');
-  const saveProductBtn = document.getElementById('saveProductBtn');
-  const cancelModalBtn = document.getElementById('cancelModalBtn');
-  const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-  const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+// script.js — complete inventory with localStorage, insights, modals
 
-  // sales elements (will be re-queried when switching tabs, but keep reference)
-  let salesProductSelect = null;
-  let salesQtySpan = null;
-  let completeSaleBtn = null;
+(function() {
+    // ----- state -----
+    let products = [];               // array of { id, name, price, stock }
+    let nextId = 1;
 
-  // ----- state -----
-  let products = [];
-  let sales = [];
-  let currentView = 'home'; // home, products, sales, report
-  let editingProductId = null; // for modal
-  let productToDelete = null;   // { id, name }
+    // DOM elements
+    const productGrid = document.getElementById('productGrid');
+    const insightPanel = document.getElementById('insightPanel');
+    const insightToggleBtn = document.getElementById('insightToggleBtn');
+    const closeInsightBtn = document.getElementById('closeInsightBtn');
+    const insightContent = document.getElementById('insightContent');
 
-  // ----- load / save storage -----
-  function loadFromStorage() {
-    try {
-      products = JSON.parse(localStorage.getItem('inventory_products')) || [];
-    } catch { products = []; }
-    try {
-      sales = JSON.parse(localStorage.getItem('inventory_sales')) || [];
-    } catch { sales = []; }
-  }
-  function saveProducts() {
-    localStorage.setItem('inventory_products', JSON.stringify(products));
-  }
-  function saveSales() {
-    localStorage.setItem('inventory_sales', JSON.stringify(sales));
-  }
+    // add/edit modal
+    const productModal = document.getElementById('productModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const productForm = document.getElementById('productForm');
+    const productId = document.getElementById('productId');
+    const itemName = document.getElementById('itemName');
+    const itemPrice = document.getElementById('itemPrice');
+    const itemStock = document.getElementById('itemStock');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const openAddModalBtn = document.getElementById('openAddModalBtn');
 
-  // helpers
-  function getThisMonthRevenueProfit() {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    let revenue = 0, profit = 0;
-    for (let s of sales) {
-      if (!s.date) continue;
-      const d = new Date(s.date);
-      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
-        revenue += s.revenue || 0;
-        profit += s.profit || 0;
-      }
+    // sell modal
+    const sellModal = document.getElementById('sellModal');
+    const sellProductInfo = document.getElementById('sellProductInfo');
+    const sellForm = document.getElementById('sellForm');
+    const sellQuantity = document.getElementById('sellQuantity');
+    const cancelSellBtn = document.getElementById('cancelSellBtn');
+
+    // current product being sold (id)
+    let currentSellId = null;
+
+    // ----- init / load from localStorage -----
+    function loadFromStorage() {
+        const stored = localStorage.getItem('stockflow_products');
+        if (stored) {
+            try {
+                products = JSON.parse(stored);
+                // determine nextId
+                if (products.length > 0) {
+                    nextId = Math.max(...products.map(p => p.id)) + 1;
+                } else {
+                    nextId = 1;
+                }
+            } catch (e) {
+                products = [];
+                nextId = 1;
+            }
+        } else {
+            // demo default products
+            products = [
+                { id: 1, name: 'Basmati rice 5kg', price: 320, stock: 15 },
+                { id: 2, name: 'Cooking oil 1L', price: 110, stock: 8 },
+                { id: 3, name: 'Wheat flour 10kg', price: 280, stock: 4 },
+                { id: 4, name: 'Sugar 5kg', price: 190, stock: 12 },
+            ];
+            nextId = 5;
+            saveToStorage();
+        }
     }
-    return { revenue, profit };
-  }
 
-  // ----- render view based on currentView -----
-  function renderView() {
-    if (currentView === 'home') renderHome();
-    else if (currentView === 'products') renderProducts();
-    else if (currentView === 'sales') renderSales();
-    else if (currentView === 'report') renderReport();
-
-    // highlight active nav
-    document.querySelectorAll('.nav-item').forEach(btn => {
-      const tab = btn.getAttribute('data-tab');
-      if (tab === currentView) btn.classList.add('active');
-      else btn.classList.remove('active');
-    });
-
-    // FAB only visible in products
-    if (currentView === 'products') {
-      fabAdd.style.display = 'flex';
-    } else {
-      fabAdd.style.display = 'none';
+    function saveToStorage() {
+        localStorage.setItem('stockflow_products', JSON.stringify(products));
     }
-  }
 
-  function renderHome() {
-    const lowStock = products.filter(p => p.stock < 20).length;
-    const totalProd = products.length;
-    const { revenue, profit } = getThisMonthRevenueProfit();
+    // ----- render product grid -----
+    function renderProducts() {
+        if (products.length === 0) {
+            productGrid.innerHTML = `<div class="empty-state">✨ inventory empty<br>tap + to add items</div>`;
+            return;
+        }
 
-    viewContainer.innerHTML = `
-      <div class="dashboard-grid">
-        <div class="stat-card"><span class="stat-label">📦 total products</span><div class="stat-value">${totalProd}</div></div>
-        <div class="stat-card"><span class="stat-label">⚠️ low stock (<20)</span><div class="stat-value">${lowStock}</div></div>
-        <div class="stat-card"><span class="stat-label">💰 month revenue</span><div class="stat-value">₹${revenue}</div></div>
-        <div class="stat-card"><span class="stat-label">📈 month profit</span><div class="stat-value">₹${profit}</div></div>
-      </div>
-    `;
-  }
-
-  function renderProducts() {
-    if (!products.length) {
-      viewContainer.innerHTML = `<div class="stat-card" style="padding:40px; text-align:center;">✨ no products yet.<br> tap + to add</div>`;
-      return;
-    }
-    let html = '<div class="products-grid">';
-    products.forEach(p => {
-      const stockClass = p.stock >= 20 ? 'green' : 'red';
-      html += `
-        <div class="product-card" data-product-id="${p.id}">
-          <div class="product-header">
-            <span class="product-name">${escapeHtml(p.name) || '?'}</span>
-            <div class="product-actions">
-              <button class="icon-btn edit" data-action="edit" data-id="${p.id}">✏️</button>
-              <button class="icon-btn delete" data-action="delete" data-id="${p.id}">🗑️</button>
-            </div>
-          </div>
-          <div class="product-detail">buy ₹${p.buy} · sell ₹${p.sell}</div>
-          <div class="stock-badge ${stockClass}">stock: ${p.stock}</div>
-        </div>
-      `;
-    });
-    html += '</div>';
-    viewContainer.innerHTML = html;
-
-    // attach listeners to edit/delete (after rendering)
-    document.querySelectorAll('.icon-btn.edit').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.getAttribute('data-id');
-        openEditModal(id);
-      });
-    });
-    document.querySelectorAll('.icon-btn.delete').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.getAttribute('data-id');
-        const prod = products.find(p => p.id === id);
-        if (prod) { productToDelete = { id: prod.id, name: prod.name }; showDeleteModal(); }
-      });
-    });
-  }
-
-  function renderSales() {
-    if (!products.length) {
-      viewContainer.innerHTML = `<div class="stat-card">add products before sale</div>`;
-      return;
-    }
-    viewContainer.innerHTML = `
-      <div class="sales-selector">
-        <label for="salesProductSelect">choose product</label>
-        <select id="salesProductSelect">
-          ${products.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (stock: ${p.stock})</option>`).join('')}
-        </select>
-        <div class="quantity-control">
-          <button class="qty-btn" id="salesDec">−</button>
-          <span id="salesQty">1</span>
-          <button class="qty-btn" id="salesInc">+</button>
-        </div>
-        <button class="complete-sale-btn" id="completeSaleBtn">✅ complete sale</button>
-      </div>
-    `;
-    salesProductSelect = document.getElementById('salesProductSelect');
-    salesQtySpan = document.getElementById('salesQty');
-    const salesDec = document.getElementById('salesDec');
-    const salesInc = document.getElementById('salesInc');
-    completeSaleBtn = document.getElementById('completeSaleBtn');
-
-    let qty = 1;
-    function updateQtyDisplay() { if (salesQtySpan) salesQtySpan.innerText = qty; }
-
-    if (salesDec) salesDec.addEventListener('click', () => {
-      if (qty > 1) qty--;
-      updateQtyDisplay();
-    });
-    if (salesInc) salesInc.addEventListener('click', () => {
-      const selectedId = salesProductSelect?.value;
-      const prod = products.find(p => p.id === selectedId);
-      if (prod && qty < prod.stock) qty++;
-      else if (prod && qty >= prod.stock) { alert('not enough stock'); }
-      updateQtyDisplay();
-    });
-
-    if (completeSaleBtn) {
-      completeSaleBtn.addEventListener('click', () => {
-        const selectedId = salesProductSelect?.value;
-        const prod = products.find(p => p.id === selectedId);
-        if (!prod) return;
-        if (prod.stock < qty) { alert('insufficient stock'); return; }
-        // perform sale
-        prod.stock -= qty;
-        const revenue = prod.sell * qty;
-        const profit = (prod.sell - prod.buy) * qty;
-        sales.push({
-          productId: prod.id,
-          revenue,
-          profit,
-          date: new Date().toISOString()
+        let html = '';
+        products.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+            html += `
+                <div class="product-card" data-id="${p.id}">
+                    <div class="product-info">
+                        <div class="product-name">${escapeHtml(p.name)}</div>
+                        <div class="product-meta">
+                            <span class="product-price">₹${p.price.toFixed(2)}</span>
+                            <span class="product-stock">${p.stock} pcs</span>
+                        </div>
+                    </div>
+                    <div class="product-actions">
+                        <button class="icon-btn sell" data-sell-id="${p.id}" aria-label="sell">💰</button>
+                        <button class="icon-btn edit" data-edit-id="${p.id}" aria-label="edit">✎</button>
+                        <button class="icon-btn delete" data-delete-id="${p.id}" aria-label="delete">🗑️</button>
+                    </div>
+                </div>
+            `;
         });
-        saveProducts();
-        saveSales();
-        // refresh sales view (reset qty)
-        if (currentView === 'sales') renderSales();
-        else renderView(); // fallback
-      });
+        productGrid.innerHTML = html;
+
+        // attach event listeners to action buttons (delegation also works but explicit)
+        document.querySelectorAll('[data-sell-id]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = Number(btn.dataset.sellId);
+                openSellModal(id);
+            });
+        });
+        document.querySelectorAll('[data-edit-id]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = Number(btn.dataset.editId);
+                openEditModal(id);
+            });
+        });
+        document.querySelectorAll('[data-delete-id]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = Number(btn.dataset.deleteId);
+                confirmDelete(id);
+            });
+        });
     }
-  }
 
-  function renderReport() {
-    const { revenue, profit } = getThisMonthRevenueProfit();
-    viewContainer.innerHTML = `
-      <div class="report-card">
-        <div class="report-row"><span class="report-label">📅 this month revenue</span> <span>₹${revenue}</span></div>
-        <div class="report-row"><span class="report-label">📈 this month profit</span> <span>₹${profit}</span></div>
-      </div>
-    `;
-  }
+    // simple escape for innerHTML safety
+    function escapeHtml(unsafe) {
+        return unsafe.replace(/[&<>"]/g, function(m) {
+            if(m === '&') return '&amp;'; if(m === '<') return '&lt;'; if(m === '>') return '&gt;'; if(m === '"') return '&quot;';
+            return m;
+        });
+    }
 
-  function escapeHtml(unsafe) {
-    if (!unsafe) return '';
-    return unsafe.replace(/[&<>"]/g, function(m) {
-      if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; if (m === '"') return '&quot;';
-      return m;
+    // ----- insights update -----
+    function updateInsights() {
+        const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
+        const totalValue = products.reduce((acc, p) => acc + (p.price * p.stock), 0);
+        const uniqueProducts = products.length;
+
+        let lowStock = products.filter(p => p.stock > 0 && p.stock <= 3).length;
+
+        const mostExpensive = products.length ? Math.max(...products.map(p => p.price)) : 0;
+
+        insightContent.innerHTML = `
+            <div class="stat-item"><span class="stat-label">📦 total stock units</span><span class="stat-value">${totalItems}</span></div>
+            <div class="stat-item"><span class="stat-label">💰 inventory value</span><span class="stat-value">₹${totalValue.toFixed(2)}</span></div>
+            <div class="stat-item"><span class="stat-label">📋 unique products</span><span class="stat-value">${uniqueProducts}</span></div>
+            <div class="stat-item"><span class="stat-label">⚠️ low stock (≤3)</span><span class="stat-value">${lowStock}</span></div>
+            <div class="stat-item"><span class="stat-label">🏷️ highest price</span><span class="stat-value">₹${mostExpensive.toFixed(2)}</span></div>
+        `;
+    }
+
+    // ----- modal controls -----
+    function openAddModal() {
+        modalTitle.innerText = '➕ add product';
+        productId.value = '';
+        itemName.value = '';
+        itemPrice.value = '';
+        itemStock.value = '';
+        productModal.classList.add('active');
+    }
+
+    function openEditModal(id) {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        modalTitle.innerText = '✎ edit product';
+        productId.value = product.id;
+        itemName.value = product.name;
+        itemPrice.value = product.price;
+        itemStock.value = product.stock;
+        productModal.classList.add('active');
+    }
+
+    function closeProductModal() {
+        productModal.classList.remove('active');
+    }
+
+    function openSellModal(id) {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        if (product.stock <= 0) {
+            alert('⚠️ out of stock');
+            return;
+        }
+        currentSellId = id;
+        sellProductInfo.innerText = `${product.name} (₹${product.price}) — stock: ${product.stock}`;
+        sellQuantity.value = '1';
+        sellQuantity.max = product.stock;
+        sellModal.classList.add('active');
+    }
+
+    function closeSellModal() {
+        sellModal.classList.remove('active');
+        currentSellId = null;
+    }
+
+    // ----- delete with confirmation -----
+    function confirmDelete(id) {
+        const product = products.find(p => p.id === id);
+        if (!product) return;
+        if (confirm(`Delete "${product.name}"?`)) {
+            products = products.filter(p => p.id !== id);
+            saveToStorage();
+            renderProducts();
+            updateInsights();
+        }
+    }
+
+    // ----- form handlers -----
+    productForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = itemName.value.trim();
+        const price = parseFloat(itemPrice.value);
+        const stock = parseInt(itemStock.value, 10);
+        if (!name || isNaN(price) || price < 0 || isNaN(stock) || stock < 0) {
+            alert('please fill valid fields');
+            return;
+        }
+
+        const id = productId.value ? Number(productId.value) : null;
+        if (id) {
+            // edit
+            const index = products.findIndex(p => p.id === id);
+            if (index !== -1) {
+                products[index] = { ...products[index], name, price, stock };
+            }
+        } else {
+            // add
+            const newId = nextId++;
+            products.push({ id: newId, name, price, stock });
+        }
+
+        saveToStorage();
+        renderProducts();
+        updateInsights();
+        closeProductModal();
     });
-  }
 
-  // ----- modal logic -----
-  function openEditModal(id = null) {
-    editingProductId = id;
-    if (id) {
-      const prod = products.find(p => p.id === id);
-      if (prod) {
-        modalTitle.innerText = '✏️ edit product';
-        productName.value = prod.name || '';
-        buyPrice.value = prod.buy;
-        sellPrice.value = prod.sell;
-        stockQty.value = prod.stock;
-      }
-    } else {
-      modalTitle.innerText = '➕ new product';
-      productName.value = ''; buyPrice.value = ''; sellPrice.value = ''; stockQty.value = '';
-    }
-    productModal.style.display = 'flex';
-  }
+    sellForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!currentSellId) return;
+        const product = products.find(p => p.id === currentSellId);
+        if (!product) return;
 
-  function closeProductModal() { productModal.style.display = 'none'; editingProductId = null; }
-  function showDeleteModal() { deleteModal.style.display = 'flex'; }
-  function closeDeleteModal() { deleteModal.style.display = 'none'; productToDelete = null; }
+        const qty = parseInt(sellQuantity.value, 10);
+        if (isNaN(qty) || qty <= 0) {
+            alert('enter positive number');
+            return;
+        }
+        if (qty > product.stock) {
+            alert(`only ${product.stock} in stock`);
+            return;
+        }
 
-  // save product
-  saveProductBtn.addEventListener('click', () => {
-    const name = productName.value.trim();
-    const buy = parseFloat(buyPrice.value);
-    const sell = parseFloat(sellPrice.value);
-    const stock = parseInt(stockQty.value, 10);
-    if (!name || isNaN(buy) || isNaN(sell) || isNaN(stock) || buy < 0 || sell < 0 || stock < 0) {
-      alert('please fill valid numbers');
-      return;
-    }
-    if (editingProductId) {
-      const idx = products.findIndex(p => p.id === editingProductId);
-      if (idx !== -1) {
-        products[idx] = { ...products[idx], name, buy, sell, stock };
-      }
-    } else {
-      const newId = Date.now().toString() + '-' + Math.random().toString(36).substring(2,6);
-      products.push({ id: newId, name, buy, sell, stock });
-    }
-    saveProducts();
-    closeProductModal();
-    if (currentView === 'products') renderProducts();
-    else renderView(); // safety
-  });
+        // reduce stock
+        product.stock -= qty;
+        saveToStorage();
+        renderProducts();
+        updateInsights();
+        closeSellModal();
+    });
 
-  cancelModalBtn.addEventListener('click', closeProductModal);
-  cancelDeleteBtn.addEventListener('click', closeDeleteModal);
-  confirmDeleteBtn.addEventListener('click', () => {
-    if (productToDelete) {
-      products = products.filter(p => p.id !== productToDelete.id);
-      saveProducts();
-      closeDeleteModal();
-      if (currentView === 'products') renderProducts();
-      else renderView();
-    }
-  });
+    // cancel buttons
+    cancelModalBtn.addEventListener('click', closeProductModal);
+    cancelSellBtn.addEventListener('click', closeSellModal);
 
-  // navigation
-  bottomNav.addEventListener('click', (e) => {
-    const navItem = e.target.closest('.nav-item');
-    if (!navItem) return;
-    const tab = navItem.getAttribute('data-tab');
-    if (!tab) return;
-    currentView = tab;
-    renderView();
-  });
+    // close modal if click outside (simple)
+    productModal.addEventListener('click', (e) => {
+        if (e.target === productModal) closeProductModal();
+    });
+    sellModal.addEventListener('click', (e) => {
+        if (e.target === sellModal) closeSellModal();
+    });
 
-  // FAB open modal for new
-  fabAdd.addEventListener('click', () => openEditModal(null));
+    // insight toggle
+    insightToggleBtn.addEventListener('click', () => {
+        insightPanel.classList.toggle('hidden');
+        updateInsights();  // fresh data when opened
+    });
+    closeInsightBtn.addEventListener('click', () => {
+        insightPanel.classList.add('hidden');
+    });
 
-  // initialise
-  loadFromStorage();
-  renderView();
+    // open add modal via FAB
+    openAddModalBtn.addEventListener('click', openAddModal);
 
-  // close modal if click outside (optional)
-  window.addEventListener('click', (e) => {
-    if (e.target === productModal) closeProductModal();
-    if (e.target === deleteModal) closeDeleteModal();
-  });
-});
+    // startup
+    loadFromStorage();
+    renderProducts();
+    updateInsights();
+    // start with insight hidden (optional)
+    insightPanel.classList.add('hidden');
+
+    // ensure max attribute updates when selling modal opens (dynamic max)
+    // but we already set in openSellModal, also on input change?
+    // Not needed for demo, but handle if user manually types > stock
+    sellQuantity.addEventListener('input', function() {
+        const prod = products.find(p => p.id === currentSellId);
+        if (prod && parseInt(this.value) > prod.stock) {
+            this.value = prod.stock;
+        }
+    });
+})();
