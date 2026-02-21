@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Smart Inventory · local shop</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- main content sections (SPA views) -->
+    <main id="viewContainer" class="view-container"></main>
+
+    <!-- floating bottom navigation -->
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="nav-item active" data-tab="home">🏠 Home</button>
+      <button class="nav-item" data-tab="products">📦 Products</button>
+      <button class="nav-item" data-tab="sales">🛒 Sales</button>
+      <button class="nav-item" data-tab="report">📊 Report</button>
+    </nav>
+
+    <!-- floating action button (only visible in products) -->
+    <button id="fabAddProduct" class="fab" style="display: none;">+</button>
+  </div>
+
+  <!-- modals (hidden by default) -->
+  <div id="productModal" class="modal">
+    <div class="modal-content">
+      <h3 id="modalTitle">➕ new product</h3>
+      <input type="text" id="productName" placeholder="product name" autocomplete="off">
+      <input type="number" id="buyPrice" placeholder="buying price ₹" min="0" step="1">
+      <input type="number" id="sellPrice" placeholder="selling price ₹" min="0" step="1">
+      <input type="number" id="stockQty" placeholder="stock quantity" min="0" step="1">
+      <div class="modal-actions">
+        <button id="saveProductBtn" class="btn-primary">💾 save</button>
+        <button id="cancelModalBtn" class="btn-secondary">cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteModal" class="modal">
+    <div class="modal-content delete-modal">
+      <p>🗑️ delete product?</p>
+      <p class="delete-warning">this cannot be undone</p>
+      <div class="modal-actions">
+        <button id="confirmDeleteBtn" class="btn-danger">yes, delete</button>
+        <button id="cancelDeleteBtn" class="btn-secondary">cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+                                                                     </html>
